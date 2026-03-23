@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Restaurante</title>
+</head>
+<body>
+    <h2>🤖 Atendimento Restaurante</h2>
+
+    <div id="chat"></div>
+
+    <input id="mensagem" placeholder="Digite..." />
+    <button onclick="enviar()">Enviar</button>
+
+    <script>
+        function enviar() {
+            let msg = document.getElementById("mensagem").value;
+
+            fetch("/chat", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({mensagem: msg})
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById("chat").innerHTML +=
+                    "<p><b>Você:</b> " + msg + "</p>" +
+                    "<p><b>Bot:</b> " + data.resposta + "</p>";
+            });
+
+            document.getElementById("mensagem").value = "";
+        }
+    </script>
+</body>
+</html>
