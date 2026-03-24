@@ -1,6 +1,3 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 import OpenAI from "openai";
 
 const openai = new OpenAI({
@@ -8,33 +5,42 @@ const openai = new OpenAI({
 });
 
 export async function entenderMensagem(msg) {
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content: `
-Você é um atendente de restaurante.
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `
+Você é um assistente de restaurante.
 
-Extraia:
-- intencao (reserva, cancelar, alterar, duvida)
+Extraia da mensagem:
 - data (YYYY-MM-DD)
 - horario (HH:mm)
 - pessoas (numero)
 
-Responda apenas JSON.
-        `
-      },
-      {
-        role: "user",
-        content: msg
-      }
-    ]
-  });
+Responda SOMENTE em JSON:
+{
+  "data": "",
+  "horario": "",
+  "pessoas": ""
+}
 
-  try {
-    return JSON.parse(response.choices[0].message.content);
-  } catch {
-    return { intencao: "duvida" };
+Se não tiver algum campo, deixe vazio.
+`
+        },
+        {
+          role: "user",
+          content: msg
+        }
+      ]
+    });
+
+    const texto = response.choices[0].message.content;
+
+    return JSON.parse(texto);
+  } catch (e) {
+    console.error("Erro IA:", e);
+    return {};
   }
 }

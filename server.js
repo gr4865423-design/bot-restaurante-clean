@@ -2,59 +2,70 @@ import express from "express";
 import bodyParser from "body-parser";
 import dotenv from "dotenv";
 
-import { getUser, salvarReserva } from "./fluxos.js";
+import pkg from "twilio";
+const { twiml: { MessagingResponse } } = pkg;
 
-import twilio from "twilio";
+import { entenderMensagem } from "./openai.js";
+import { getUser, salvarReserva } from "./fluxos.js";
 
 dotenv.config();
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-app.post("/webhook", (req, res) => {
-  const MessagingResponse = twilio.twiml.MessagingResponse;
-  const twiml = new MessagingResponse();
+app.post("/webhook", async (req, res) => {
+  try {
+    const twiml = new MessagingResponse();
 
-  const msg = req.body.Body?.trim();
-  const numero = req.body.From || "teste";
+    const msg = req.body.Body?.trim();
+    const numero = req.body.From;
 
-  const user = getUser(numero);
+    const user = getUser(numero);
 
-  // 🔥 FLUXO INTELIGENTE SEM IA
+    // 🔥 IA ENTENDE A MENSAGEM
+    const ia = await entenderMensagem(msg);
 
-  if (!user.dados.data) {
-    user.dados.data = msg;
-    twiml.message("Qual horário deseja? ⏰");
-    return res.type("text/xml").send(twiml.toString());
-  }
+    if (ia.data) user.dados.data = ia.data;
+    if (ia.horario) user.dados.horario = ia.horario;
+    if (ia.pessoas) user.dados.pessoas = ia.pessoas;
 
-  if (!user.dados.horario) {
-    user.dados.horario = msg;
-    twiml.message("Para quantas pessoas? 👥");
-    return res.type("text/xml").send(twiml.toString());
-  }
+    // 🔥 FLUXO INTELIGENTE
 
-  if (!user.dados.pessoas) {
-    user.dados.pessoas = msg;
+    if (!user.dados.data) {
+      twiml.message("📅 Qual dia deseja reservar?");
+      return res.type("text/xml").send(twiml.toString());
+    }
 
+    if (!user.dados.horario) {
+      twiml.message("⏰ Qual horário?");
+      return res.type("text/xml").send(twiml.toString());
+    }
+
+    if (!user.dados.pessoas) {
+      twiml.message("👥 Para quantas pessoas?");
+      return res.type("text/xml").send(twiml.toString());
+    }
+
+    // 🔥 CONFIRMAÇÃO BONITA
     const reserva = salvarReserva(numero, user.dados);
 
     user.dados = {};
 
-    twiml.message(`✅ Reserva confirmada!
+    twiml.message(`✨ *Reserva Confirmada!* ✨
 
-📅 ${reserva.data}
-⏰ ${reserva.horario}
-👥 ${reserva.pessoas} pessoas
+📅 *Data:* ${reserva.data}
+⏰ *Horário:* ${reserva.horario}
+👥 *Pessoas:* ${reserva.pessoas}
 
-Aguardamos você 🍕🔥`);
+🍕 Estamos te esperando!
+Qualquer alteração é só avisar 😉`);
 
     return res.type("text/xml").send(twiml.toString());
-  }
 
-  // fallback
-  twiml.message("Não entendi, pode reformular?");
-  res.type("text/xml").send(twiml.toString());
+  } catch (error) {
+    console.error("ERRO:", error);
+    return res.status(200).send("Erro interno");
+  }
 });
 
 app.listen(3000, () => {
