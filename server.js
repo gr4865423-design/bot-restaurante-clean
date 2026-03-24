@@ -11,16 +11,16 @@ dotenv.config();
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
+const MessagingResponse = twilio.twiml.MessagingResponse;
+
 app.post("/webhook", async (req, res) => {
-  const MessagingResponse = twilio.twiml.MessagingResponse;
   const twiml = new MessagingResponse();
 
   const msg = req.body.Body;
-  const numero = req.body.From;
-
-  console.log("Mensagem:", msg);
+  const numero = req.body.From || "teste";
 
   const user = getUser(numero);
+
   const ia = await entenderMensagem(msg);
 
   if (ia.data) user.dados.data = ia.data;
@@ -40,30 +40,24 @@ app.post("/webhook", async (req, res) => {
 👥 ${reserva.pessoas} pessoas
 
 Aguardamos você 🍕🔥
-`);
-    
+    `);
+
     return res.type("text/xml").send(twiml.toString());
   }
 
   if (!user.dados.data) {
     twiml.message("Qual dia deseja reservar? 📅");
-    return res.type("text/xml").send(twiml.toString());
-  }
-
-  if (!user.dados.horario) {
+  } else if (!user.dados.horario) {
     twiml.message("Qual horário? ⏰");
-    return res.type("text/xml").send(twiml.toString());
-  }
-
-  if (!user.dados.pessoas) {
+  } else if (!user.dados.pessoas) {
     twiml.message("Para quantas pessoas? 👥");
-    return res.type("text/xml").send(twiml.toString());
+  } else {
+    twiml.message("Não entendi, pode reformular?");
   }
 
-  twiml.message("Não entendi, pode reformular?");
   res.type("text/xml").send(twiml.toString());
 });
 
-app.listen(process.env.PORT || 3000, () => {
+app.listen(3000, () => {
   console.log("Servidor rodando 🚀");
 });
