@@ -13,26 +13,39 @@ app.use(bodyParser.urlencoded({ extended: false }));
 
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
+// 🔥 WEBHOOK PRINCIPAL
 app.post("/webhook", async (req, res) => {
-  const twiml = new MessagingResponse();
+  try {
+    const twiml = new MessagingResponse();
 
-  const msg = req.body.Body;
-  const numero = req.body.From || "teste";
+    const msg = req.body.Body;
+    const numero = req.body.From || "teste";
 
-  const user = getUser(numero);
+    console.log("📩 Mensagem recebida:", msg);
 
-  const ia = await entenderMensagem(msg);
+    const user = getUser(numero);
 
-  if (ia.data) user.dados.data = ia.data;
-  if (ia.horario) user.dados.horario = ia.horario;
-  if (ia.pessoas) user.dados.pessoas = ia.pessoas;
+    let ia = {};
 
-  if (user.dados.data && user.dados.horario && user.dados.pessoas) {
-    const reserva = salvarReserva(numero, user.dados);
+    try {
+      ia = await entenderMensagem(msg);
+      console.log("🧠 IA respondeu:", ia);
+    } catch (error) {
+      console.log("❌ ERRO OPENAI:", error);
+      ia = { intencao: "duvida" };
+    }
 
-    user.dados = {};
+    if (ia.data) user.dados.data = ia.data;
+    if (ia.horario) user.dados.horario = ia.horario;
+    if (ia.pessoas) user.dados.pessoas = ia.pessoas;
 
-    twiml.message(`
+    // ✅ Se já tem tudo → confirma reserva
+    if (user.dados.data && user.dados.horario && user.dados.pessoas) {
+      const reserva = salvarReserva(numero, user.dados);
+
+      user.dados = {};
+
+      twiml.message(`
 ✅ Reserva confirmada!
 
 📅 ${reserva.data}
@@ -40,24 +53,42 @@ app.post("/webhook", async (req, res) => {
 👥 ${reserva.pessoas} pessoas
 
 Aguardamos você 🍕🔥
-    `);
+      `);
 
-    return res.type("text/xml").send(twiml.toString());
+      return res.type("text/xml").send(twiml.toString());
+    }
+
+    // 🔄 Fluxo de perguntas
+    if (!user.dados.data) {
+      twiml.message("Qual dia deseja reservar? 📅");
+    } else if (!user.dados.horario) {
+      twiml.message("Qual horário? ⏰");
+    } else if (!user.dados.pessoas) {
+      twiml.message("Para quantas pessoas? 👥");
+    } else {
+      twiml.message("Não entendi, pode reformular?");
+    }
+
+    res.type("text/xml").send(twiml.toString());
+
+  } catch (err) {
+    console.log("💥 ERRO GERAL:", err);
+
+    const twiml = new MessagingResponse();
+    twiml.message("Erro interno 😢 tente novamente");
+
+    res.type("text/xml").send(twiml.toString());
   }
-
-  if (!user.dados.data) {
-    twiml.message("Qual dia deseja reservar? 📅");
-  } else if (!user.dados.horario) {
-    twiml.message("Qual horário? ⏰");
-  } else if (!user.dados.pessoas) {
-    twiml.message("Para quantas pessoas? 👥");
-  } else {
-    twiml.message("Não entendi, pode reformular?");
-  }
-
-  res.type("text/xml").send(twiml.toString());
 });
 
-app.listen(3000, () => {
-  console.log("Servidor rodando 🚀");
+// 🌐 ROTA TESTE (opcional)
+app.get("/", (req, res) => {
+  res.send("🔥 BOT RODANDO");
+});
+
+// 🚀 START
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Servidor rodando 🚀 na porta ${PORT}`);
 });
