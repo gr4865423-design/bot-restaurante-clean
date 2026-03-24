@@ -14,22 +14,51 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
 app.post("/webhook", async (req, res) => {
-  try {
-    const twiml = new MessagingResponse();
+  const twiml = new MessagingResponse();
 
+  try {
     const msg = req.body.Body?.trim();
     const numero = req.body.From;
 
+    console.log("📩 MSG:", msg);
+
     const user = getUser(numero);
 
-    // 🔥 IA ENTENDE A MENSAGEM
-    const ia = await entenderMensagem(msg);
+    // 🔥 IA SEGURA (não quebra o sistema)
+    let ia = {};
 
-    if (ia.data) user.dados.data = ia.data;
-    if (ia.horario) user.dados.horario = ia.horario;
-    if (ia.pessoas) user.dados.pessoas = ia.pessoas;
+    try {
+      ia = await entenderMensagem(msg);
+      console.log("🤖 IA:", ia);
+    } catch (e) {
+      console.log("⚠️ Erro IA, ignorando...");
+    }
 
-    // 🔥 FLUXO INTELIGENTE
+    // salva dados se IA entender
+    if (ia?.data) user.dados.data = ia.data;
+    if (ia?.horario) user.dados.horario = ia.horario;
+    if (ia?.pessoas) user.dados.pessoas = ia.pessoas;
+
+    // 🧠 fallback manual (garante funcionamento)
+    if (!ia?.data && !user.dados.data) {
+      if (msg.match(/\d{2}\/\d{2}/) || msg.toLowerCase().includes("amanhã")) {
+        user.dados.data = msg;
+      }
+    }
+
+    if (!ia?.horario && !user.dados.horario) {
+      if (msg.match(/\d{1,2}h/)) {
+        user.dados.horario = msg;
+      }
+    }
+
+    if (!ia?.pessoas && !user.dados.pessoas) {
+      if (msg.match(/\d+/)) {
+        user.dados.pessoas = msg;
+      }
+    }
+
+    // 🔥 FLUXO
 
     if (!user.dados.data) {
       twiml.message("📅 Qual dia deseja reservar?");
@@ -46,7 +75,7 @@ app.post("/webhook", async (req, res) => {
       return res.type("text/xml").send(twiml.toString());
     }
 
-    // 🔥 CONFIRMAÇÃO BONITA
+    // 🎉 CONFIRMAÇÃO BONITA
     const reserva = salvarReserva(numero, user.dados);
 
     user.dados = {};
@@ -58,14 +87,23 @@ app.post("/webhook", async (req, res) => {
 👥 *Pessoas:* ${reserva.pessoas}
 
 🍕 Estamos te esperando!
-Qualquer alteração é só avisar 😉`);
+Se precisar alterar, é só avisar 😉`);
 
     return res.type("text/xml").send(twiml.toString());
 
   } catch (error) {
-    console.error("ERRO:", error);
-    return res.status(200).send("Erro interno");
+    console.error("💥 ERRO GERAL:", error);
+
+    // 🔥 NUNCA MAIS 502
+    twiml.message("⚠️ Tivemos um erro, tente novamente.");
+
+    return res.type("text/xml").send(twiml.toString());
   }
+});
+
+// rota teste (opcional)
+app.get("/", (req, res) => {
+  res.send("Servidor online 🚀");
 });
 
 app.listen(3000, () => {
